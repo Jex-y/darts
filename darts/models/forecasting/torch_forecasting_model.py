@@ -661,6 +661,7 @@ class TorchForecastingModel(GlobalForecastingModel, ABC):
         epochs: int = 0,
         max_samples_per_ts: Optional[int] = None,
         num_loader_workers: int = 0,
+        dataloader_kwargs: Optional[dict] = None,
     ) -> "TorchForecastingModel":
         """Fit/train the model on one or multiple series.
 
@@ -741,6 +742,8 @@ class TorchForecastingModel(GlobalForecastingModel, ABC):
             epochs=epochs,
             max_samples_per_ts=max_samples_per_ts,
             num_loader_workers=num_loader_workers,
+            dataloader_kwargs=dataloader_kwargs,
+
         )
         # call super fit only if user is actually fitting the model
         super().fit(
@@ -763,6 +766,7 @@ class TorchForecastingModel(GlobalForecastingModel, ABC):
         epochs: int = 0,
         max_samples_per_ts: Optional[int] = None,
         num_loader_workers: int = 0,
+        dataloader_kwargs: Optional[dict] = None,
     ) -> Tuple[
         Tuple[
             Sequence[TimeSeries],
@@ -898,6 +902,7 @@ class TorchForecastingModel(GlobalForecastingModel, ABC):
             verbose,
             epochs,
             num_loader_workers,
+            dataloader_kwargs=dataloader_kwargs,
         )
         return series_input, fit_from_ds_params
 
@@ -910,6 +915,7 @@ class TorchForecastingModel(GlobalForecastingModel, ABC):
         verbose: Optional[bool] = None,
         epochs: int = 0,
         num_loader_workers: int = 0,
+        dataloader_kwargs: Optional[dict] = None,
     ) -> "TorchForecastingModel":
         """
         Train the model with a specific :class:`darts.utils.data.TrainingDataset` instance.
@@ -961,6 +967,7 @@ class TorchForecastingModel(GlobalForecastingModel, ABC):
                 verbose=verbose,
                 epochs=epochs,
                 num_loader_workers=num_loader_workers,
+                data_loader_kwargs=dataloader_kwargs,
             )
         )
         return self
@@ -973,6 +980,8 @@ class TorchForecastingModel(GlobalForecastingModel, ABC):
         verbose: Optional[bool] = None,
         epochs: int = 0,
         num_loader_workers: int = 0,
+        data_loader_kwargs: Optional[dict] = None,
+
     ) -> Tuple[pl.Trainer, PLForecastingModule, DataLoader, Optional[DataLoader]]:
         """This method acts on `TrainingDataset` inputs. It performs sanity checks, and sets up / returns the trainer,
         model, and dataset loaders required for training the model with `_train()`.
@@ -1032,16 +1041,25 @@ class TorchForecastingModel(GlobalForecastingModel, ABC):
                 ),
             )
 
+        # default dataloader kwargs
+        default_dataloader_kwargs = dict(
+            shuffle=True,
+            pin_memory=True,
+            drop_last=False,
+        )
+
+        # Update with user provided dataloader kwargs
+        if data_loader_kwargs is not None:
+            default_dataloader_kwargs.update(data_loader_kwargs)
+
         # Setting drop_last to False makes the model see each sample at least once, and guarantee the presence of at
         # least one batch no matter the chosen batch size
         train_loader = DataLoader(
             train_dataset,
             batch_size=self.batch_size,
-            shuffle=True,
             num_workers=num_loader_workers,
-            pin_memory=True,
-            drop_last=False,
             collate_fn=self._batch_collate_fn,
+            **default_dataloader_kwargs,
         )
 
         # Prepare validation data
@@ -1051,11 +1069,9 @@ class TorchForecastingModel(GlobalForecastingModel, ABC):
             else DataLoader(
                 val_dataset,
                 batch_size=self.batch_size,
-                shuffle=False,
                 num_workers=num_loader_workers,
-                pin_memory=True,
-                drop_last=False,
                 collate_fn=self._batch_collate_fn,
+                **default_dataloader_kwargs,
             )
         )
 
